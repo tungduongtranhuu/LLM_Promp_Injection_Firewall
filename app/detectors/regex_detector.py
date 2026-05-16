@@ -6,22 +6,22 @@ class RegexDetector:
     # Attack patterns's dictionnary
     PATTERN = {
         "prompt_override" : [
-            r"ignore previous instructions",
-            r"forget (about|the) above",
-            r"disregard (the )?(above|previous)",
-            r"forget everything you (were|know)",
+            r"ignore\s+previous\s+instructions",
+            r"forget\s+(about|the)\s+above",
+            r"disregard\s+(the\s+)?(above|previous)",
+            r"forget\s+everything\s+you\s+(were|know)",
         ],
         "extraction": [
-            r"(reveal|show|tell me|print) (the )?system prompt",
-            r"what was i instructed",
-            r"what are your instructions",
-            r"hidden prompt",
+            r"(reveal|show|tell\s+me|print)(\s+me)?\s+(the\s+)?system\s+prompt",
+            r"what\s+was\s+i\s+instructed",
+            r"what\s+are\s+your\s+instructions",
+            r"hidden\s+prompt",
         ],
         "role_switching": [
-            r"you are now",
-            r"pretend you are",
-            r"act as",
-            r"from now on",
+            r"you\s+are\s+now",
+            r"pretend\s+you\s+are",
+            r"act\s+as",
+            r"from\s+now\s+on",
         ]
     }
 
@@ -31,9 +31,9 @@ class RegexDetector:
         
         Return:
         {
-            "matches": ["prompt_override", "extraction"],
-            "score_add": 40
+            "matches": ["prompt_override", "extraction"]
         }
+        
         """
         matches = []
         text_lower = text.lower()
@@ -43,21 +43,6 @@ class RegexDetector:
                     matches.append(attack_type)
                     break  # No need to check other patterns of the same type
         
-        score_add = len(matches) * 20  # Each match adds 20 to the risk score
         return {
-            "matches": matches,
-            "score_add": score_add
+            "matches": matches
         }
-
-if __name__ == "__main__":
-    detector = RegexDetector()
-    
-    # Test 1: malicious
-    result = detector.detect("ignore previous instructions")
-    print(f"Test 1: {result}")
-    # Output: {'matches': ['prompt_override'], 'score_add': 20}
-    
-    # Test 2: safe
-    result = detector.detect("What is Python?")
-    print(f"Test 2: {result}")
-    # Output: {'matches': [], 'score_add': 0}

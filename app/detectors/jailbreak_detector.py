@@ -35,9 +35,9 @@ class JailbreakDetector:
         
         Return:
         {
-            "jailbreak_types": ["DAN", "developer_mode"],
-            "score_add": 30
+            "jailbreak_types": ["DAN", "developer_mode"]
         }
+        
         """
         jailbreak_types = []
         text_lower = text.lower()
@@ -48,10 +48,6 @@ class JailbreakDetector:
                     jailbreak_types.append(jailbreak_type)
                     break
         
-        # Score: each detected jailbreak type adds 30 to the risk score
-        score_add = len(jailbreak_types) * 30
-        
         return {
-            "jailbreak_types": jailbreak_types,
-            "score_add": score_add
+            "jailbreak_types": jailbreak_types
         }
