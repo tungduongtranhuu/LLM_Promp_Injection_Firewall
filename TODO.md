@@ -73,11 +73,11 @@ Ngoài ra `config.py` có `custom_*_weight` và `get_risk_action` nhưng **khôn
 → Sửa: giảm mạnh `encoding_detected.base_score`, chỉ cộng điểm lớn khi payload giải mã ra **khớp một detector khác**. Bỏ qua kết quả giải mã không phải văn bản đọc được. Thêm 2 input trên vào test như **test false positive**.
  
 **c. Các dạng tấn công còn thiếu** (thêm vào `indirect_detector` hoặc output scanner, mỗi dạng kèm 1 test true positive và 1 test false positive):
-- [ ] **Fake delimiter / chat template**: `<|system|>`, `### System:`, `[INST]`, `</context>`, hoặc đoạn hội thoại giả `User: … Assistant: …`
-- [ ] **Instruction gửi cho IA trong tài liệu**: `note to (the )?AI`, `à l'attention de l'assistant`, `when summarizing this document`, comment HTML, chữ vô hình
-- [ ] **Exfiltration qua Markdown** (output): `![](https://domaine-externe/?q=...)` hoặc link chứa dữ liệu. Khi được hiển thị, trình duyệt sẽ tự gửi dữ liệu ra ngoài. Chặn mọi URL ngoài allowlist trong output
-- [ ] **Đa ngôn ngữ**: ít nhất tiếng Pháp cho các pattern chính
-- [ ] (Ghi vào phần "Limites" của README, không cần code) payload splitting, paraphrase: giới hạn cố hữu của detector dựa trên luật
+- [x] **Fake delimiter / chat template**: `<|system|>`, `### System:`, `[INST]`, `</context>`, hoặc đoạn hội thoại giả `User: … Assistant: …`
+- [x] **Instruction gửi cho IA trong tài liệu**: `note to (the )?AI`, `à l'attention de l'assistant`, `when summarizing this document`, comment HTML, chữ vô hình
+- [x] **Exfiltration qua Markdown** (output): `![](https://domaine-externe/?q=...)` hoặc link chứa dữ liệu. Khi được hiển thị, trình duyệt sẽ tự gửi dữ liệu ra ngoài. Chặn mọi URL ngoài allowlist trong output
+- [x] **Đa ngôn ngữ**: ít nhất tiếng Pháp cho các pattern chính
+- [x] (Ghi vào phần "Limites" của README, không cần code) payload splitting, paraphrase: giới hạn cố hữu của detector dựa trên luật
 ### 1.6 Hình thức (quan trọng khi gửi cho recruteur ở Pháp)
 - README viết bằng tiếng Việt, người tuyển dụng ở Pháp không đọc được. → Viết README bằng **tiếng Pháp** (hoặc tiếng Anh), giữ bản tiếng Việt ở `docs/README.vi.md`.
 - README hiện mô tả tính năng **chưa có** (dashboard, redaction...). → Tách rõ hai phần "Implémenté" và "Roadmap".
@@ -91,15 +91,17 @@ Ngoài ra `config.py` có `custom_*_weight` và `get_risk_action` nhưng **khôn
 Ước tính dựa trên việc dùng Claude Code. **MVP (P1 đến P4) ≈ 1 ngày làm việc.** P5 và P6 là bonus.
  
 ### P1 : Nối pipeline firewall (~2h)
-- [ ] `app/normalize.py` (mục 1.4)
-- [ ] `app/pipeline.py` : `scan(text, context) -> ScanResult` (score, decision, detectors, details)
-- [ ] Sửa regex (mục 1.1), thêm pattern FR
-- [ ] Phân loại lại nhãn, sửa scoring encoding, thêm các dạng còn thiếu (mục 1.5)
-- [ ] `app/detectors/indirect_detector.py` : câu gọi trực tiếp AI (`note to (the )?ai`, `assistant\s*:`, `when (answering|summarizing)`, `à l'attention de l'IA`), comment HTML `<!-- … -->`, ký tự zero-width, URL nằm ngoài allowlist domain
-- [ ] Tham số `context` và trọng số theo context (mục 1.2)
-- [ ] Gộp ngưỡng về một nơi (mục 1.3)
-- [ ] `app/logging/audit.py` : ghi JSONL theo schema trong ARCHITECTURE.md §3.3 (UTC, `request_id`, `excerpt` tối đa 200 ký tự, **không** log toàn bộ secret)
-- [ ] Test cho mỗi điểm trên, và tất cả test cũ vẫn phải pass
+- [x] `app/normalize.py` (mục 1.4)
+- [x] `app/pipeline.py` : `scan(text, context) -> ScanResult` (score, decision, detectors, details)
+- [x] Sửa regex (mục 1.1), thêm pattern FR
+- [x] Phân loại lại nhãn, sửa scoring encoding, thêm các dạng còn thiếu (mục 1.5)
+- [x] `app/detectors/indirect_detector.py` : câu gọi trực tiếp AI (`note to (the )?ai`, `assistant\s*:`, `when (answering|summarizing)`, `à l'attention de l'IA`), comment HTML `<!-- … -->`, ký tự zero-width, URL nằm ngoài allowlist domain
+- [x] Tham số `context` và trọng số theo context (mục 1.2)
+- [x] Gộp ngưỡng về một nơi (mục 1.3)
+- [x] `app/logging/audit.py` : ghi JSONL theo schema trong ARCHITECTURE.md §3.3 (UTC, `request_id`, `excerpt` tối đa 200 ký tự, **không** log toàn bộ secret)
+- [x] Test cho mỗi điểm trên, và tất cả test cũ vẫn phải pass
+- Ghi chú: `scanners/` và `sanitizers/` (file rỗng) được thay thế bởi `pipeline.scan(text, context)`. P1 không sửa chúng; P2 quyết định xóa hoặc biến thành wrapper mỏng.
+- Kết quả FP/FN và nhật ký chỉnh trọng số: `eval/RESULTS.md`.
 ### P2 : Nền tảng RAG (~2h)
 - [ ] Ollama chạy **trên máy (WSL)** tại `http://localhost:11434` (biến `OLLAMA_URL`). **Không** thêm Ollama vào docker-compose. `docker-compose.yml` chỉ là tùy chọn, dành cho app.
 - [ ] `app/llm/provider.py` (Ollama; bỏ Gemini hoặc để làm provider tùy chọn)
