@@ -37,6 +37,7 @@ python -m resilience.drill                 # full scenario (once implemented)
 ## Safety and scope
 - `resilience/attack.py` is a **lab simulation**: it only writes to this repo's `data/corpus/` and `data/chroma/` (`--direct` mode deliberately bypasses the ingestion scanner [0]) and uses the reserved domain `acme-support-reset.example`. Never target real domains or real systems.
 - Never commit `.env`, `data/chroma/`, `backups/`, `quarantine/`, `logs/` or `reports/`.
+- Never write a fake secret that matches a real secret format in source, tests, docs or eval data (e.g. `sk_live_…`, `sk_test_…`, `AKIA…`, `ghp_…`, `xoxb-…`, `-----BEGIN … PRIVATE KEY-----`): GitHub Push Protection blocks the push. Always build such strings at runtime, e.g. `"sk_" + "live_" + "0fake" * 8`.
 ## How to work
 - Work phase by phase (P1 → P4 in `TODO.md`). Before coding, state which TODO items you are addressing and the files you will touch.
 - Prefer small commits with conventional messages (`feat:`, `fix:`, `test:`, `docs:`, `refactor:`).
