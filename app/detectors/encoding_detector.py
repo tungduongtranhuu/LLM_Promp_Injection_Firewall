@@ -104,26 +104,33 @@ class EncodingDetector:
         
         return results
     
+    # Characters expected in readable text, besides letters and spaces.
+    _READABLE_PUNCTUATION = frozenset(".,;:!?'\"-_/()[]{}@#%&*+=<>|~`$\\")
+
     def _is_valid_decoded(self, text: str) -> bool:
         """
-        Check if decoded text is valid (not gibberish)
-        Used for Hex, URL, Unicode decodings
+        Check that a decoded payload is readable text, not byte garbage.
+
+        Unreadable decodes are dropped: they never become text variants and
+        never add to the score (TODO 1.5b).
         """
         if not text or len(text) < 3:
             return False
-        
-        printable_count = sum(1 for c in text if c.isprintable())
-        printable_ratio = printable_count / len(text)
-        
-        if printable_ratio < 0.7:
+
+        printable_ratio = sum(1 for c in text if c.isprintable()) / len(text)
+        if printable_ratio < 0.95:
             return False
-        
+
+        readable = sum(1 for c in text if c.isalpha() or c.isspace() or c in self._READABLE_PUNCTUATION)
+        if readable / len(text) < 0.8:
+            return False
+
         digit_ratio = sum(1 for c in text if c.isdigit()) / len(text)
         if digit_ratio > 0.6:
             return False
-        
+
         return True
-    
+
     def _might_be_rot13(self, text: str) -> bool:
         """
         Heuristic: check if text might be ROT13 encoded
@@ -162,7 +169,8 @@ class EncodingDetector:
             if not re.search(r'^[A-Za-z0-9+/]*={0,2}$', text.strip()):
                 return None
             
-            decoded = base64.b64decode(text.strip()).decode('utf-8', errors='ignore')
+            # Strict UTF-8: invalid bytes mean the input was not encoded text.
+            decoded = base64.b64decode(text.strip(), validate=True).decode('utf-8')
             
             # Validate: decoded should be printable
             if len(decoded) > 0 and decoded.isprintable():
@@ -183,7 +191,7 @@ class EncodingDetector:
                 return None
             
             # Decode
-            decoded = bytes.fromhex(hex_str).decode('utf-8', errors='ignore')
+            decoded = bytes.fromhex(hex_str).decode('utf-8')  # strict, see base64
             
             if len(decoded) > 0 and decoded.isprintable():
                 return decoded
