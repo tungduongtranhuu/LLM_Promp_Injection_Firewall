@@ -227,16 +227,35 @@ Ví dụ:
 
 | Tín hiệu | Điểm |
 |---|---|
-| Ignore previous instructions | +40 |
-| System extraction | +35 |
-| Base64 payload | +15 |
-| Unicode obfuscation | +10 |
+| Ignore previous instructions (`prompt_override`) | +50 |
+| System prompt extraction (`extraction`) | +35 |
+| Base64 payload décodé qui déclenche un détecteur | +20 |
+| Signal faible seul (`act as`, `tell the user`) | 0 |
+
+Poids complets et justification : `app/scoring/rules.py` et `eval/RESULTS.md`.
 
 Mức độ:
 
 - 0–30: Allow
-- 31–60: Warn
-- 61–100: Block
+- 31–49: Warn
+- 50–100: Block (seuils définis dans `app/scoring/rules.py`, surchargeables par `WARN_THRESHOLD` / `BLOCK_THRESHOLD`)
+
+## Mesures (P1)
+
+Jeu de développement (`python -m eval.run_eval`, détail dans `eval/RESULTS.md`) :
+
+| Contexte | FP alerte | FP blocage | FN alerte | FN blocage |
+|---|---|---|---|---|
+| `user_prompt` (51 bénins / 50 attaques) | 2,0 % | 0,0 % | 0,0 % | 30,0 % |
+| `retrieved_chunk` (15 / 15) | 0,0 % | 0,0 % | 0,0 % | 0,0 % |
+
+Avant P1 : FN alerte de 84 % (`user_prompt`) et 93 % (`retrieved_chunk`). Ces chiffres « dev » sont optimistes (jeu écrit par l'auteur des détecteurs) ; la mesure de référence est le jeu `eval/holdout/`.
+
+## Limites
+
+- Détection à base de règles : contournable par **paraphrase**, par une autre langue que l'anglais ou le français, et par **découpage de la charge** (*payload splitting* : instruction répartie sur plusieurs messages ou plusieurs chunks).
+- Les URL ne sont contrôlées que si elles commencent par `http://` ou `https://` ; un domaine écrit seul (`acme-support-reset.example`) n'est pas détecté.
+- L'entropie de Shannon (seuil 4,5) est conçue pour des prompts courts ; un long texte naturel la dépasse souvent (+5 points).
 
 ---
 

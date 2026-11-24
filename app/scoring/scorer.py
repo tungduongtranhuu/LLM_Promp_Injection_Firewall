@@ -1,166 +1,173 @@
-from typing import Dict, List, Tuple
+"""Turn detector findings into a risk score. Every number comes from rules.py."""
+
+from __future__ import annotations
+
+from collections.abc import Sequence
+from typing import Any, Dict, List, Optional, Tuple
+
 from app.scoring.rules import ScoringRules
+
+# Result key holding the technique ids, for each detector that runs on every variant.
+VARIANT_DETECTOR_KEYS = {
+    "regex": "matches",
+    "jailbreak": "jailbreak_types",
+    "indirect": "findings",
+    "output": "findings",
+}
 
 
 class RiskScorer:
-    def __init__(self):
+    def __init__(self) -> None:
         self.rules = ScoringRules()
 
-
-    def score_encoding(self, detection_result: Dict) -> float:
-        """Score encoding detection result"""
-        score = 0.0
-        
-        # Score for detected encodings
-        if detection_result.get("encodings_detected"):
-            for encoding in detection_result["encodings_detected"]:
-                score += self.rules.ENCODING_RULES["encoding_detected"]["base_score"]
-        
-        # Score for each decoded payload
-        if detection_result.get("decoded_payloads"):
-            score += len(detection_result["decoded_payloads"]) * self.rules.ENCODING_RULES["decoded_payload"]["score"]
-        
-        # Score for high entropy
-        entropy = detection_result.get("entropy_score", 0.0)
-        if entropy > self.rules.ENCODING_RULES["high_entropy"]["threshold"]:
-            score += self.rules.ENCODING_RULES["high_entropy"]["score"]
-        
-        # Score for patterns (only if no actual encodings detected)
-        if not detection_result.get("encodings_detected") and detection_result.get("encoding_patterns"):
-            score += len(detection_result["encoding_patterns"]) * self.rules.ENCODING_RULES["pattern_detected"]["score"]
-        
-        return score
-    
-    def score_heuristic(self, detection_result: Dict) -> float:
-        """Score heuristic detection result"""
-        anomalies = detection_result.get("anomalies", [])
-        score = len(anomalies) * self.rules.HEURISTIC_RULES["anomaly"]["score_per_anomaly"]
-        return score
-    
-    def score_regex(self, detection_result: Dict) -> float:
-        """Score regex detection result"""
-        matches = detection_result.get("matches", [])
-        
-        # Use weights if available, otherwise use default
-        score = 0.0
-        for match in matches:
-            weight = self.rules.REGEX_RULES["pattern_weights"].get(match, self.rules.REGEX_RULES["pattern_match"]["score_per_match"])
-            score += weight
-        
-        return score
-    
-    def score_jailbreak(self, detection_result: Dict) -> float:
-        """Score jailbreak detection result"""
-        jailbreak_types = detection_result.get("jailbreak_types", [])
-        
-        # Use weights if available, otherwise use default
-        score = 0.0
-        for jb_type in jailbreak_types:
-            weight = self.rules.JAILBREAK_RULES["type_weights"].get(jb_type, self.rules.JAILBREAK_RULES["jailbreak_type"]["score_per_type"])
-            score += weight
-        
-        return score
-    
-    
+    # ------------------------------------------------------------------ public API
     def score_all(
         self,
         encoding_result: Dict,
         heuristic_result: Dict,
         regex_results: List[Dict],
-        jailbreak_results: List[Dict]
+        jailbreak_results: List[Dict],
+        indirect_results: Optional[List[Dict]] = None,
+        output_results: Optional[List[Dict]] = None,
+        *,
+        context: str = "user_prompt",
+        variant_names: Optional[Sequence[str]] = None,
+        warn: Optional[float] = None,
+        block: Optional[float] = None,
     ) -> Tuple[float, Dict]:
         """
-        Score all detection results and calculate final risk.
-        
-        Args:
-            encoding_result: Output from EncodingDetector.detect()
-            heuristic_result: Output from HeuristicDetector.detect()
-            regex_results: List of outputs from RegexDetector.detect() (one per text variant)
-            jailbreak_results: List of outputs from JailbreakDetector.detect() (one per text variant)
-        
-        Return:
-            (total_score, scoring_details)
-            
-            total_score: 0-100
-            scoring_details: {
-                "encoding": {"score": 20, "result": {...}},
-                "heuristic": {"score": 10, "result": {...}},
-                "regex": {"score": 20, "max_from_variants": "variant_1", "variants": [...]},
-                "jailbreak": {"score": 30, "max_from_variants": "variant_0", "variants": [...]},
-                "total": 80,
-                "risk_level": {"level": "HIGH", "action": "BLOCK", "score": 80}
-            }
-        """
-        
-        encoding_score = self.score_encoding(encoding_result)
-        
-        heuristic_score = self.score_heuristic(heuristic_result)
-        
-        regex_scores = [self.score_regex(r) for r in regex_results]
-        regex_score = max(regex_scores) if regex_scores else 0.0
-        regex_max_variant = self._find_max_variant(regex_results, regex_scores)
-        
-        jailbreak_scores = [self.score_jailbreak(r) for r in jailbreak_results]
-        jailbreak_score = max(jailbreak_scores) if jailbreak_scores else 0.0
-        jailbreak_max_variant = self._find_max_variant(jailbreak_results, jailbreak_scores)
-        
-        aggregation_method = self.rules.AGGREGATION_RULES["method"]
-        
-        if aggregation_method == "sum":
-            total_score = encoding_score + heuristic_score + regex_score + jailbreak_score
-        elif aggregation_method == "weighted_sum":
-            weights = self.rules.AGGREGATION_RULES["detector_weights"]
-            total_score = (
-                encoding_score * weights["encoding"] +
-                heuristic_score * weights["heuristic"] +
-                regex_score * weights["regex"] +
-                jailbreak_score * weights["jailbreak"]
-            )
-        else:
-            total_score = encoding_score + heuristic_score + regex_score + jailbreak_score
-        
-        max_score = self.rules.AGGREGATION_RULES["max_score_cap"]
-        total_score = min(total_score, max_score)
-        
-        risk_level = self.rules.get_risk_level(total_score)
-        
-        details = {
-            "encoding": {
-                "score": encoding_score,
-                "result": encoding_result
-            },
-            "heuristic": {
-                "score": heuristic_score,
-                "result": heuristic_result
-            },
-            "regex": {
-                "score": regex_score,
-                "max_from_variant": regex_max_variant,
-                "variants": [
-                    {"variant": i, "score": regex_scores[i], "result": regex_results[i]}
-                    for i in range(len(regex_results))
-                ]
-            },
-            "jailbreak": {
-                "score": jailbreak_score,
-                "max_from_variant": jailbreak_max_variant,
-                "variants": [
-                    {"variant": i, "score": jailbreak_scores[i], "result": jailbreak_results[i]}
-                    for i in range(len(jailbreak_results))
-                ]
-            },
-            "total": total_score,
-            "risk_level": risk_level
-        }
-        
-        return total_score, details
-    
-    @staticmethod
-    def _find_max_variant(results: List[Dict], scores: List[float]) -> str:
-        """Find which variant had the maximum score"""
-        if not scores:
-            return "N/A"
-        
-        max_idx = scores.index(max(scores))
-        return f"variant_{max_idx}"
+        Score all detection results for one scanned text.
 
+        Args:
+            encoding_result: EncodingDetector.detect() on the original text
+            heuristic_result: HeuristicDetector.detect() on the original text
+            regex_results, jailbreak_results, indirect_results, output_results:
+                one result per text variant, in the order of `variant_names`
+            context: user_prompt | document | retrieved_chunk | llm_output
+            variant_names: names from app.normalize.build_variants ("original", "decoded_0"...)
+            warn, block: threshold overrides (app.config), default to rules.py
+
+        Return: (total_score, details) with details = {
+            "context", "total", "risk_level",
+            "detector_scores": {"regex": 50.0, ...},
+            "best_variant": {"regex": "decoded_0", ...},
+            "findings": [{"technique", "detector", "variant", "points", "label", "owasp", "atlas"}, ...],
+        }
+        """
+        rules = self.rules
+        ctx = rules.context_rules(context)  # ValueError on an unknown context
+        enabled = set(ctx["enabled_detectors"])
+        per_variant = {
+            "regex": regex_results or [],
+            "jailbreak": jailbreak_results or [],
+            "indirect": indirect_results or [],
+            "output": output_results or [],
+        }
+        n_variants = max((len(r) for r in per_variant.values()), default=0)
+        names = list(variant_names) if variant_names is not None else [f"variant_{i}" for i in range(n_variants)]
+
+        # 1. Techniques per detector: best variant for variant detectors, original for heuristic.
+        selected: Dict[str, Tuple[str, List[str]]] = {}
+        for detector, results in per_variant.items():
+            if detector not in enabled or not results:
+                continue
+            candidates = [self._techniques(detector, r, context) for r in results]
+            best = max(range(len(candidates)), key=lambda i: (self._points(detector, candidates[i], True), -i))
+            selected[detector] = (names[best], candidates[best])
+        if "heuristic" in enabled:
+            anomalies = self._filter(heuristic_result.get("anomalies", []), "heuristic", context)
+            selected["heuristic"] = ("original", anomalies)
+
+        # 2. Weak signals count only next to a non-weak finding.
+        has_strong = any(t not in rules.WEAK_SIGNALS for _, techs in selected.values() for t in techs)
+
+        findings: List[Dict[str, Any]] = []
+        detector_scores: Dict[str, float] = {}
+        for detector, (variant, techniques) in selected.items():
+            weight = rules.detector_weight(context, detector)
+            total = 0.0
+            for technique in techniques:
+                points = rules.technique_weight(detector, technique) * weight
+                if technique in rules.WEAK_SIGNALS and not has_strong:
+                    points = 0.0
+                total += points
+                findings.append(self._finding(technique, detector, variant, points, context))
+            detector_scores[detector] = total
+
+        # 3. Encoding: only readable decodes count, and mostly when the decoded text is malicious.
+        if "encoding" in enabled:
+            decoded_hit = self._decoded_variant_hit(per_variant, names, context, enabled)
+            encoding_score = self.score_encoding(encoding_result, decoded_hit) * rules.detector_weight(context, "encoding")
+            detector_scores["encoding"] = encoding_score
+            if encoding_score > 0:
+                findings.append(self._finding("encoded_payload", "encoding", "original", encoding_score, context))
+
+        total_score = min(sum(detector_scores.values()), rules.MAX_SCORE)
+        risk_level = rules.get_risk_level(total_score, warn=warn, block=block)
+        findings.sort(key=lambda f: f["points"], reverse=True)
+        details = {
+            "context": context,
+            "total": total_score,
+            "risk_level": risk_level,
+            "detector_scores": detector_scores,
+            "best_variant": {d: v for d, (v, _) in selected.items()},
+            "findings": findings,
+        }
+        return total_score, details
+
+    def score_encoding(self, detection_result: Dict, decoded_hit: bool = False) -> float:
+        """Encoding is an evasion technique: small signal unless decoded content is malicious.
+
+        A ROT13-only decode is ignored unless it triggered a detector, because ROT13
+        of any letter string ("deadbeefcafebabe") still looks like letters.
+        """
+        enc = self.rules.ENCODING_RULES
+        decoded = detection_result.get("encodings_detected") or []
+        readable = [e for e in decoded if e != "rot13"]
+        score = 0.0
+        if readable or decoded_hit:
+            score += enc["encoding_present"]
+        if decoded_hit:
+            score += enc["decoded_triggers_detector"]
+        if detection_result.get("entropy_score", 0.0) > enc["high_entropy"]["threshold"]:
+            score += enc["high_entropy"]["score"]
+        if not decoded:
+            score += len(detection_result.get("encoding_patterns") or []) * enc["pattern_detected"]
+        return score
+
+    # ------------------------------------------------------------------ helpers
+    def _filter(self, techniques: Sequence[str], detector: str, context: str) -> List[str]:
+        disabled = self.rules.context_rules(context)["disabled_findings"].get(detector, ())
+        return [t for t in techniques if t not in disabled]
+
+    def _techniques(self, detector: str, result: Dict, context: str) -> List[str]:
+        return self._filter(result.get(VARIANT_DETECTOR_KEYS[detector], []), detector, context)
+
+    def _points(self, detector: str, techniques: Sequence[str], strong_only: bool) -> float:
+        return sum(
+            self.rules.technique_weight(detector, t)
+            for t in techniques
+            if not (strong_only and t in self.rules.WEAK_SIGNALS)
+        )
+
+    def _decoded_variant_hit(
+        self, per_variant: Dict[str, List[Dict]], names: Sequence[str], context: str, enabled: set
+    ) -> bool:
+        for detector, results in per_variant.items():
+            if detector not in enabled:
+                continue
+            for name, result in zip(names, results):
+                if name.startswith("decoded_") and self._points(detector, self._techniques(detector, result, context), True) > 0:
+                    return True
+        return False
+
+    def _finding(self, technique: str, detector: str, variant: str, points: float, context: str) -> Dict[str, Any]:
+        label = self.rules.label_for(technique, context)
+        return {
+            "technique": technique,
+            "detector": detector,
+            "variant": variant,
+            "points": points,
+            "label": label,
+            **self.rules.taxonomy_for(label),
+        }

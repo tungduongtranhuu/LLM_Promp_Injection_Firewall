@@ -186,6 +186,30 @@ def test_mixed_anomalies():
     assert len(result["anomalies"]) > 0, f"Expected multiple anomalies"
 
 
+# ---------- P1: command-syntax false positives (missing word boundaries) ----------
+import pytest
+
+
+@pytest.mark.parametrize("text", [
+    "I got an email from my manager about the class schedule",
+    "Please update my badge and delete my old account",
+    "I need to import my contacts into Outlook",
+    "From now on I will work from the Lyon office",
+])
+def test_language_switching_false_positives_in_prose(text):
+    assert "language_switching" not in HeuristicDetector().detect(text)["anomalies"]
+
+
+@pytest.mark.parametrize("text", [
+    "Please run: from os import path",
+    "Then type SELECT name FROM users",
+    "Use import numpy as np before plotting",
+    "Then DROP TABLE accounts and exit",
+])
+def test_language_switching_true_positives_code(text):
+    assert "language_switching" in HeuristicDetector().detect(text)["anomalies"]
+
+
 def run_all_tests():
     """Run all tests and report results"""
     tests = [
