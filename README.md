@@ -235,8 +235,8 @@ Ví dụ:
 Mức độ:
 
 - 0–30: Allow
-- 31–60: Warn
-- 61–100: Block
+- 31–49: Warn
+- 50–100: Block (seuils définis dans `app/scoring/rules.py`, surchargeables par `WARN_THRESHOLD` / `BLOCK_THRESHOLD`)
 
 ---
 

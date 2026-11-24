@@ -72,6 +72,42 @@ def test_config_module_imports_without_error():
         raise AssertionError(f"Config import failed: {e}")
 
 
+def test_threshold_defaults_come_from_scoring_rules(monkeypatch):
+    """config.py must not hold its own copy of the thresholds (TODO 1.3)"""
+    import importlib
+    from app import config
+    from app.scoring.rules import ScoringRules
+
+    monkeypatch.delenv("BLOCK_THRESHOLD", raising=False)
+    monkeypatch.delenv("WARN_THRESHOLD", raising=False)
+    importlib.reload(config)
+    assert config.block_threshold == ScoringRules.BLOCK_THRESHOLD
+    assert config.warn_threshold == ScoringRules.WARN_THRESHOLD
+
+
+def test_thresholds_can_be_overridden_from_env(monkeypatch):
+    import importlib
+    from app import config
+
+    monkeypatch.setenv("BLOCK_THRESHOLD", "70")
+    monkeypatch.setenv("WARN_THRESHOLD", "40")
+    try:
+        importlib.reload(config)
+        assert config.block_threshold == 70
+        assert config.warn_threshold == 40
+    finally:
+        monkeypatch.undo()
+        importlib.reload(config)
+
+
+def test_dead_config_removed():
+    """custom_*_weight and get_risk_action were never used by app/ (TODO 1.3)"""
+    from app import config
+
+    assert not hasattr(config, "get_risk_action")
+    assert not [name for name in vars(config) if name.startswith("custom_")]
+
+
 def run_all_tests():
     """Run all tests and report results"""
     tests = [

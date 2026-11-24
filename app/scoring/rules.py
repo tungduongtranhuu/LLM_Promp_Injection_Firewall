@@ -117,27 +117,17 @@ class ScoringRules:
         }
     }
     
+    # Decision thresholds: the single source of truth. app/config.py may override
+    # them from env vars (WARN_THRESHOLD / BLOCK_THRESHOLD) but never redefines them.
+    WARN_THRESHOLD = 31   # score >= 31 -> WARN
+    BLOCK_THRESHOLD = 50  # score >= 50 -> BLOCK
+
     RISK_THRESHOLDS = {
-        "low": {
-            "min": 0,
-            "max": 30,
-            "level": "LOW",
-            "action": "ALLOW"
-        },
-        "medium": {
-            "min": 31,
-            "max": 49,
-            "level": "MEDIUM",
-            "action": "WARN"
-        },
-        "high": {
-            "min": 50,
-            "max": 100,
-            "level": "HIGH",
-            "action": "BLOCK"
-        }
+        "low": {"min": 0, "level": "LOW", "action": "ALLOW"},
+        "medium": {"min": WARN_THRESHOLD, "level": "MEDIUM", "action": "WARN"},
+        "high": {"min": BLOCK_THRESHOLD, "level": "HIGH", "action": "BLOCK"},
     }
-    
+
     AGGREGATION_RULES = {
         "description": "How to combine scores from different detectors",
         "method": "sum",  
@@ -152,40 +142,24 @@ class ScoringRules:
     }
     
     @classmethod
-    def get_risk_level(cls, score: float) -> Dict:
+    def get_risk_level(
+        cls, score: float, warn: float | None = None, block: float | None = None
+    ) -> Dict:
         """
-        Determine risk level based on score.
-        
-        Args:
-            score: Risk score (0-100)
-            
-        Return: Risk level info
-        {
-            "level": "LOW" | "MEDIUM" | "HIGH",
-            "action": "ALLOW" | "WARN" | "BLOCK",
-            "score": score
-        }
+        Map a score to a risk level and action.
+
+        BLOCK if score >= block, WARN if score >= warn, ALLOW otherwise.
+        `warn` / `block` default to the class thresholds; callers pass the
+        env-overridden values from app.config.
+
+        Return: {"level": "LOW"|"MEDIUM"|"HIGH", "action": "ALLOW"|"WARN"|"BLOCK", "score": score}
         """
-        thresholds = cls.RISK_THRESHOLDS
-        
-        if score <= thresholds["low"]["max"]:
-            return {
-                "level": thresholds["low"]["level"],
-                "action": thresholds["low"]["action"],
-                "score": score
-            }
-        elif score <= thresholds["medium"]["max"]:
-            return {
-                "level": thresholds["medium"]["level"],
-                "action": thresholds["medium"]["action"],
-                "score": score
-            }
+        warn = cls.WARN_THRESHOLD if warn is None else warn
+        block = cls.BLOCK_THRESHOLD if block is None else block
+        if score >= block:
+            tier = cls.RISK_THRESHOLDS["high"]
+        elif score >= warn:
+            tier = cls.RISK_THRESHOLDS["medium"]
         else:
-            return {
-                "level": thresholds["high"]["level"],
-                "action": thresholds["high"]["action"],
-                "score": score
-            }
-
-
-
+            tier = cls.RISK_THRESHOLDS["low"]
+        return {"level": tier["level"], "action": tier["action"], "score": score}
