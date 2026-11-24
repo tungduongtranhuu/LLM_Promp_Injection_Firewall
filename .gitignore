@@ -5,3 +5,10 @@ __pycache__/
 *.pyc
 
 logs/
+data/chroma/
+backups/
+quarantine/
+reports/
+
+# personal notes
+docs/travail.md
