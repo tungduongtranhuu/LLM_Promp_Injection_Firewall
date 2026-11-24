@@ -11,6 +11,7 @@ quarantine/
 reports/
 
 # personal notes
-docs/
+docs/*
+!docs/ARCHITECTURE.md
 
 REPORT/
