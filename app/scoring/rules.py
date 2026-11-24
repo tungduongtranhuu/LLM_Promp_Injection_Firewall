@@ -42,7 +42,7 @@ class ScoringRules:
         "type_weights": {
             "DAN": 50,              # tier A
             "developer_mode": 50,   # tier A
-            "unrestricted": 50,     # tier A
+            "unrestricted": 35,     # tier B: "no restrictions" also appears in policy text (W2)
             "evil_assistant": 50,   # tier A
         }
     }
