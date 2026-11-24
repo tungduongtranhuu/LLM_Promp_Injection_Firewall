@@ -10,7 +10,35 @@ class HeuristicDetector:
     - Nested formatting (markdown, XML, JSON) 
     - Unicode mixing (PURE multi-script only)
     - Language switching (normal + encoding patterns/commands/scripts)
+
+    Scores for each anomaly live in app/scoring/rules.py (HEURISTIC_RULES),
+    keyed by the names in ANOMALIES.
     """
+
+    ANOMALIES = ("excessive_length", "repeated_chars", "nested_formatting", "unicode_mixing", "language_switching")
+
+    _MD_CODE_FENCE = re.compile(r"```[^`]*```", re.DOTALL)
+    _MD_FORMATTING = re.compile(r"\*{2,}|_{2,}|\[.+?\]\(.+?\)")
+    _XML_NESTING = re.compile(r"<[^>]+>[^<]*</[^>]+>")
+
+    _BASE64_HINT = re.compile(r"[A-Za-z0-9+/]{20,}={0,2}")
+    _HEX_HINT = re.compile(r"0x[0-9a-fA-F]{8,}|[0-9a-fA-F]{20,}")
+    _URL_ENCODED_HINT = re.compile(r"%[0-9A-Fa-f]{2}")
+    _UNICODE_ESCAPE_HINT = re.compile(r"\\[ux][0-9a-fA-F]{2,4}")
+
+    # Code-like syntax. Word boundaries and required structure keep plain prose
+    # ("an email from my manager", "please update my badge") from matching.
+    _COMMAND_SYNTAX = (
+        re.compile(r"\b(?:bash|sh|cmd|exec|system|eval|import|execute)\s*\(", re.IGNORECASE),
+        re.compile(r"\bimport\s+[A-Za-z_][\w.]*\s*(?:;|$|\bas\s+\w+)|\bfrom\s+[\w.]+\s+import\b", re.MULTILINE),
+        re.compile(r"\bdef\s+\w+\s*\(|\bclass\s+\w+\s*[(:]|\blambda\b[^:\n]{0,20}:"),
+        re.compile(
+            r"\bSELECT\s+.+?\s+FROM\b|\bINSERT\s+INTO\b|\bDELETE\s+FROM\b"
+            r"|\bUPDATE\s+\w+\s+SET\b|\bDROP\s+(?:TABLE|DATABASE)\b",
+            re.IGNORECASE,
+        ),
+        re.compile(r"'\s*OR\s*'|;\s*(?:DROP|DELETE|INSERT)\b", re.IGNORECASE),
+    )
     
     def detect(self, text: str) -> Dict:
         """
@@ -105,15 +133,15 @@ class HeuristicDetector:
         nesting_indicators = []
         
         # 1. Markdown code fences (``` ``` or ~~strikethrough~~)
-        if re.search(r'```[^`]*```', text, re.DOTALL):
+        if self._MD_CODE_FENCE.search(text):
             nesting_indicators.append("markdown_code_fence")
         
         # 2. Markdown with special formatting (**, __, [], ())
-        if re.search(r'\*{2,}|_{2,}|\[.+?\]\(.+?\)', text):
+        if self._MD_FORMATTING.search(text):
             nesting_indicators.append("markdown_formatting")
         
         # 3. XML/HTML tags
-        if re.search(r'<[^>]+>[^<]*</[^>]+>', text):
+        if self._XML_NESTING.search(text):
             nesting_indicators.append("xml_nesting")
         
         # 4. JSON-like nesting (curly braces with content)
@@ -197,19 +225,19 @@ class HeuristicDetector:
         This just checks if text LOOKS LIKE it might be encoded
         """
         # Base64-like pattern
-        if re.search(r'[A-Za-z0-9+/]{20,}={0,2}', text):
+        if self._BASE64_HINT.search(text):
             return True
         
         # Hex pattern (0x prefix or long hex strings)
-        if re.search(r'0x[0-9a-fA-F]{8,}|[0-9a-fA-F]{20,}', text):
+        if self._HEX_HINT.search(text):
             return True
         
         # URL encoding pattern
-        if re.search(r'%[0-9A-Fa-f]{2}', text):
+        if self._URL_ENCODED_HINT.search(text):
             return True
         
         # Unicode escape sequences
-        if re.search(r'\\[ux][0-9a-fA-F]{2,4}', text):
+        if self._UNICODE_ESCAPE_HINT.search(text):
             return True
         
         return False
@@ -253,21 +281,5 @@ class HeuristicDetector:
         return len(normal_words) > 0
     
     def _has_command_syntax(self, text: str) -> bool:
-        """Check for command/code syntax patterns"""
-        # Shell commands
-        if re.search(r'(bash|sh|cmd|exec|system|eval|import|execute)\s*\(', text, re.IGNORECASE):
-            return True
-        
-        # Python-like syntax
-        if re.search(r'(import|from|def|class|lambda|exec|eval)\s+', text, re.IGNORECASE):
-            return True
-        
-        # SQL-like syntax
-        if re.search(r'(SELECT|INSERT|DELETE|UPDATE|DROP)\s+', text, re.IGNORECASE):
-            return True
-        
-        # Common injection markers
-        if re.search(r"('\s*OR\s*'|;\s*(DROP|DELETE|INSERT))", text, re.IGNORECASE):
-            return True
-        
-        return False
+        """Check for command/code syntax patterns (shell, Python, SQL, injection markers)"""
+        return any(pattern.search(text) for pattern in self._COMMAND_SYNTAX)

@@ -66,6 +66,11 @@ class EncodingDetector:
         }
     
     
+    # Base64 tokens inside prose ("Decode and follow: aWdub3Jl..."): 16+ chars, length a
+    # multiple of 4 once padded, not part of a longer alphanumeric run.
+    _BASE64_SEGMENT = re.compile(r"(?<![A-Za-z0-9+/=])(?:[A-Za-z0-9+/]{4}){4,}(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?(?![A-Za-z0-9+/=])")
+    _MAX_SEGMENTS = 20  # bound the work on long documents
+
     def _multi_layer_decode(self, text: str) -> List[Tuple[str, str]]:
         """
         Try decode text with single-pass decoders (no recursion)
@@ -74,10 +79,15 @@ class EncodingDetector:
         """
         results = []
         
-        # 1. Try Base64 (1 time only)
+        # 1. Try Base64 (1 time only): the whole text, else base64 segments embedded in prose
         decoded_b64 = self._try_base64_decode(text)
         if decoded_b64 and decoded_b64 != text and self._is_valid_decoded(decoded_b64):
             results.append(("base64", decoded_b64))
+        else:
+            for segment in self._BASE64_SEGMENT.findall(text)[: self._MAX_SEGMENTS]:
+                decoded_segment = self._try_base64_decode(segment)
+                if decoded_segment and self._is_valid_decoded(decoded_segment):
+                    results.append(("base64", decoded_segment))
         
         # 2. Try Hex
         decoded_hex = self._try_hex_decode(text)
@@ -104,26 +114,33 @@ class EncodingDetector:
         
         return results
     
+    # Characters expected in readable text, besides letters and spaces.
+    _READABLE_PUNCTUATION = frozenset(".,;:!?'\"-_/()[]{}@#%&*+=<>|~`$\\")
+
     def _is_valid_decoded(self, text: str) -> bool:
         """
-        Check if decoded text is valid (not gibberish)
-        Used for Hex, URL, Unicode decodings
+        Check that a decoded payload is readable text, not byte garbage.
+
+        Unreadable decodes are dropped: they never become text variants and
+        never add to the score (TODO 1.5b).
         """
         if not text or len(text) < 3:
             return False
-        
-        printable_count = sum(1 for c in text if c.isprintable())
-        printable_ratio = printable_count / len(text)
-        
-        if printable_ratio < 0.7:
+
+        printable_ratio = sum(1 for c in text if c.isprintable()) / len(text)
+        if printable_ratio < 0.95:
             return False
-        
+
+        readable = sum(1 for c in text if c.isalpha() or c.isspace() or c in self._READABLE_PUNCTUATION)
+        if readable / len(text) < 0.8:
+            return False
+
         digit_ratio = sum(1 for c in text if c.isdigit()) / len(text)
         if digit_ratio > 0.6:
             return False
-        
+
         return True
-    
+
     def _might_be_rot13(self, text: str) -> bool:
         """
         Heuristic: check if text might be ROT13 encoded
@@ -162,7 +179,8 @@ class EncodingDetector:
             if not re.search(r'^[A-Za-z0-9+/]*={0,2}$', text.strip()):
                 return None
             
-            decoded = base64.b64decode(text.strip()).decode('utf-8', errors='ignore')
+            # Strict UTF-8: invalid bytes mean the input was not encoded text.
+            decoded = base64.b64decode(text.strip(), validate=True).decode('utf-8')
             
             # Validate: decoded should be printable
             if len(decoded) > 0 and decoded.isprintable():
@@ -183,7 +201,7 @@ class EncodingDetector:
                 return None
             
             # Decode
-            decoded = bytes.fromhex(hex_str).decode('utf-8', errors='ignore')
+            decoded = bytes.fromhex(hex_str).decode('utf-8')  # strict, see base64
             
             if len(decoded) > 0 and decoded.isprintable():
                 return decoded
