@@ -7,7 +7,7 @@ category each one belongs to.
 
 Weight tiers (justified by the eval in eval/RESULTS.md, not by target inputs):
 - Tier A, 50 = BLOCK on its own: phrasing with essentially no benign use.
-- Tier B, 30-35 = WARN on its own: usually malicious, plausible benign uses.
+- Tier B, 35 = WARN on its own: usually malicious, plausible benign uses.
 - Weak signals, 10: only count when another non-weak finding is present.
 """
 
@@ -51,10 +51,10 @@ class ScoringRules:
         "weights": {
             "fake_delimiter": 50,           # tier A
             "ai_addressing": 35,            # tier B
-            "conditional_instruction": 30,  # tier B
-            "hidden_html_comment": 30,      # tier B
-            "zero_width_chars": 30,         # tier B
-            "unapproved_url": 30,           # tier B
+            "conditional_instruction": 35,  # tier B
+            "hidden_html_comment": 35,      # tier B
+            "zero_width_chars": 35,         # tier B
+            "unapproved_url": 35,           # tier B
             "relay_instruction": 10,        # weak signal ("indiquez à l'utilisateur de redémarrer")
         }
     }

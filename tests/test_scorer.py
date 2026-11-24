@@ -155,3 +155,17 @@ def test_no_dead_scoring_config():
     assert set(ScoringRules.OUTPUT_RULES["weights"]) == emitted["output"]
     labelled = set().union(*emitted.values()) | {"encoded_payload"}
     assert set(ScoringRules.TECHNIQUE_LABELS) == labelled
+
+
+def test_every_non_weak_technique_reaches_warn_on_its_own():
+    """Tier rule: any real finding (not a weak signal, not a heuristic hint) is at least WARN alone."""
+    tables = {
+        "regex": ScoringRules.REGEX_RULES["pattern_weights"],
+        "jailbreak": ScoringRules.JAILBREAK_RULES["type_weights"],
+        "indirect": ScoringRules.INDIRECT_RULES["weights"],
+        "output": ScoringRules.OUTPUT_RULES["weights"],
+    }
+    for detector, weights in tables.items():
+        for technique, weight in weights.items():
+            if technique not in ScoringRules.WEAK_SIGNALS:
+                assert weight >= ScoringRules.WARN_THRESHOLD, (detector, technique, weight)
