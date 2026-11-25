@@ -1,28 +1,46 @@
 import uuid
+from functools import lru_cache
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends, Response
 
-from app.logging.audit import log_scan
+from app.llm.provider import LLMProvider, OllamaProvider
 from app.models import ChatRequest, ChatResponse
-from app.pipeline import scan
+from app.rag.chain import answer
+from app.rag.store import VectorStore
 
 router = APIRouter()
 
-BLOCKED_MESSAGE = "Votre message a été bloqué par le pare-feu de l'assistant."
+UNAVAILABLE_STATUSES = frozenset({"unavailable", "maintenance"})
 
 
+@lru_cache(maxsize=1)
+def get_provider() -> LLMProvider:
+    return OllamaProvider()
+
+
+@lru_cache(maxsize=1)
+def get_store() -> VectorStore:
+    return VectorStore(get_provider())
+
+
+# Sync handlers: FastAPI runs them in a thread pool (httpx and ChromaDB calls are blocking).
 @router.post("/chat", response_model=ChatResponse)
-async def chat(request: ChatRequest) -> ChatResponse:
-    """Scan the user prompt and log the result. The LLM call arrives in P2."""
-    request_id = uuid.uuid4().hex
-    result = scan(request.message, "user_prompt")
-    log_scan("prompt.scanned", result, request.message, request_id=request_id)
+def chat(
+    request: ChatRequest,
+    response: Response,
+    provider: LLMProvider = Depends(get_provider),
+    store: VectorStore = Depends(get_store),
+) -> ChatResponse:
+    """[1] input scan -> [2][3] retrieval + chunk scan -> LLM -> [4] output scan."""
+    result = answer(request.message, provider=provider, store=store, request_id=uuid.uuid4().hex)
+    if result.status in UNAVAILABLE_STATUSES:
+        response.status_code = 503
+    return result
 
-    blocked = result.decision == "BLOCK"
-    return ChatResponse(
-        response=BLOCKED_MESSAGE if blocked else "received",
-        status="blocked" if blocked else "safe",
-        score=result.score,
-        decision=result.decision,
-        request_id=request_id,
-    )
+
+@router.get("/health")
+def health(
+    provider: LLMProvider = Depends(get_provider),
+    store: VectorStore = Depends(get_store),
+) -> dict:
+    return {"status": "ok", "ollama": provider.ping(), "chunks": store.count()}

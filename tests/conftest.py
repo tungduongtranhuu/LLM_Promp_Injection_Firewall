@@ -93,6 +93,22 @@ def corpus(tmp_path: Path) -> Path:
 
 
 @pytest.fixture
+def client(provider: FakeProvider, store: VectorStore, audit_log: Path):
+    """TestClient wired to the fake provider and the tmp_path store (never Ollama, never data/)."""
+    from fastapi.testclient import TestClient
+
+    from app.api.routes import get_provider, get_store
+    from app.main import app
+
+    app.dependency_overrides[get_provider] = lambda: provider
+    app.dependency_overrides[get_store] = lambda: store
+    try:
+        yield TestClient(app)
+    finally:
+        app.dependency_overrides.clear()
+
+
+@pytest.fixture
 def events(audit_log: Path) -> Callable[..., list[dict]]:
     """events() -> every audit event; events("x.y") -> only that event_type."""
 
