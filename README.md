@@ -248,11 +248,14 @@ Jeu de développement (`python -m eval.run_eval`, détail dans `eval/RESULTS.md`
 |---|---|---|---|---|
 | `user_prompt` (51 bénins / 50 attaques) | 2,0 % | 0,0 % | 0,0 % | 30,0 % |
 | `retrieved_chunk` (15 / 15) | 0,0 % | 0,0 % | 0,0 % | 0,0 % |
+| **holdout** `user_prompt` (14 / 16) | 7,1 % | 7,1 % | **100,0 %** | 100,0 % |
+| **holdout** `retrieved_chunk` (3 / 3) | 0,0 % | 0,0 % | **66,7 %** | 100,0 % |
 
-Avant P1 : FN alerte de 84 % (`user_prompt`) et 93 % (`retrieved_chunk`). Ces chiffres « dev » sont optimistes (jeu écrit par l'auteur des détecteurs) ; la mesure de référence est le jeu `eval/holdout/`.
+Avant P1 : FN alerte de 84 % (`user_prompt`) et 93 % (`retrieved_chunk`). Les chiffres « dev » sont optimistes, car le jeu a été écrit par l'auteur des détecteurs. La mesure de référence est le jeu `eval/holdout/`, exécuté une seule fois : voir « Limites ».
 
 ## Limites
 
+- **Mesure sur un jeu de test indépendant (holdout, exécuté une fois, sans réglage après coup)** : le firewall ne détecte **aucune des 16 attaques** `user_prompt` (FN 100 %) et bloque 1 texte bénin sur 14 (FP 7,1 %). En `retrieved_chunk`, il donne une seule alerte sur 3 attaques (FN 66,7 %, aucun blocage) et aucun FP sur 3 textes bénins. Le jeu de développement affichait 0 % de FN en alerte : ces chiffres ne se généralisent pas. Les échantillons sont petits (14/16 et 3/3), donc les taux sont imprécis. Détails dans `eval/RESULTS.md`.
 - Détection à base de règles : contournable par **paraphrase**, par une autre langue que l'anglais ou le français, et par **découpage de la charge** (*payload splitting* : instruction répartie sur plusieurs messages ou plusieurs chunks).
 - Les URL ne sont contrôlées que si elles commencent par `http://` ou `https://` ; un domaine écrit seul (`acme-support-reset.example`) n'est pas détecté.
 - L'entropie de Shannon (seuil 4,5) est conçue pour des prompts courts ; un long texte naturel la dépasse souvent (+5 points).

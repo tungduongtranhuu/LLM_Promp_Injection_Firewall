@@ -44,7 +44,34 @@ Le jeu de développement a été écrit **avant** toute modification des détect
 
 ### Holdout
 
-Pas encore mesuré : `eval/holdout/` n'existe pas encore. Il sera exécuté une seule fois, avec les poids figés ci-dessus, et le résultat sera reporté ici tel quel.
+Exécuté **une seule fois** le 25/11/2026 (`python -m eval.run_eval --holdout`), sur le commit `7de0237`. Les poids et les détecteurs sont ceux de `675b193`, non modifiés depuis. Le jeu `eval/holdout/` a été écrit séparément par l'auteur du projet. Il n'a jamais été lu pendant le développement, et rien n'a été réglé après ce résultat. Sortie brute :
+
+```text
+== HOLDOUT | context: user_prompt ==
+benign   14 | ALLOW  13  WARN   0  BLOCK   1 | FP (WARN+BLOCK)   1   7.1% | FP (BLOCK)       1   7.1%
+attack   16 | ALLOW  16  WARN   0  BLOCK   0 | FN (ALLOW)       16 100.0% | FN (not BLOCK)  16 100.0%
+
+== HOLDOUT | context: retrieved_chunk ==
+benign    3 | ALLOW   3  WARN   0  BLOCK   0 | FP (WARN+BLOCK)   0   0.0% | FP (BLOCK)       0   0.0%
+attack    3 | ALLOW   2  WARN   1  BLOCK   0 | FN (ALLOW)        2  66.7% | FN (not BLOCK)   3 100.0%
+```
+
+#### Comparaison dev / holdout
+
+| Contexte | Jeu | Bénins / attaques | FP alerte | FP blocage | FN alerte | FN blocage |
+|---|---|---|---|---|---|---|
+| `user_prompt` | dev | 51 / 50 | 2,0 % (1) | 0,0 % (0) | 0,0 % (0) | 30,0 % (15) |
+| `user_prompt` | **holdout** | 14 / 16 | **7,1 % (1)** | **7,1 % (1)** | **100,0 % (16)** | **100,0 % (16)** |
+| `retrieved_chunk` | dev | 15 / 15 | 0,0 % (0) | 0,0 % (0) | 0,0 % (0) | 0,0 % (0) |
+| `retrieved_chunk` | **holdout** | 3 / 3 | **0,0 % (0)** | **0,0 % (0)** | **66,7 % (2)** | **100,0 % (3)** |
+
+#### Lecture
+
+- **Les chiffres dev ne se généralisent pas.** Aucune des 16 attaques `user_prompt` du holdout n'est détectée, alors que le dev affichait 0 % de FN en alerte. Les détecteurs sont ajustés aux formulations du jeu dev, écrit par la même personne que les règles (biais annoncé plus haut).
+- **Le seul faux positif du holdout est un BLOCK**, et pas seulement une alerte. Sur le dev, il n'y avait aucun BLOCK sur un texte bénin.
+- **Les échantillons sont petits**, donc les taux sont imprécis. Par exemple, 0 détection sur 16 attaques donne un taux de détection réel probablement inférieur à environ 19 % (règle de trois, IC 95 %). 1 FP sur 14 est compatible avec un taux réel allant d'environ 0,2 % à 34 %. Les 3 + 3 chunks ne permettent aucune conclusion chiffrée.
+- **Les erreurs ne sont pas analysées**, et c'est voulu. `--holdout` n'affiche que des agrégats, pour que le jeu reste un test. L'hypothèse principale est la paraphrase (formulations absentes des motifs), mais elle n'est pas vérifiée.
+- **Suite :** le holdout n'est plus « neuf » pour les réglages futurs. Toute amélioration (par exemple le détecteur sémantique prévu en P6) devra être mesurée sur un nouveau holdout, ou bien ce holdout devra être signalé comme déjà vu.
 
 ### Erreurs restantes (dev)
 
