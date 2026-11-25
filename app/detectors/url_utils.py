@@ -36,3 +36,28 @@ def host_allowed(host: str, allowlist: Iterable[str]) -> bool:
 def unapproved_hosts(hosts: Sequence[str], allowlist: Iterable[str]) -> list[str]:
     allowlist = tuple(allowlist)
     return [h for h in hosts if not host_allowed(h, allowlist)]
+
+
+# Whole URL: scheme, host (group 1), then an optional path that does not end
+# on sentence punctuation, so "see https://x.example/a." keeps its final dot.
+URL_FULL_RE = re.compile(
+    r"\bhttps?://([^\s/?#<>\"'()\[\]]+)(?:[/?#][^\s<>\"'()\[\]]*[^\s<>\"'()\[\].,;:!?])?",
+    re.IGNORECASE,
+)
+
+
+def redact_unapproved_urls(
+    text: str, allowlist: Iterable[str], placeholder: str
+) -> tuple[str, list[str]]:
+    """Replace every URL whose host is not allowlisted. Returns (new_text, redacted_hosts)."""
+    allowlist = tuple(allowlist)
+    redacted: list[str] = []
+
+    def _replace(match: re.Match[str]) -> str:
+        host = url_host(match.group(1))
+        if host_allowed(host, allowlist):
+            return match.group(0)
+        redacted.append(host)
+        return placeholder
+
+    return URL_FULL_RE.sub(_replace, text), redacted

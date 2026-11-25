@@ -89,6 +89,24 @@ class ScoringRules:
     # Domains whose URLs are legitimate (subdomains included).
     URL_ALLOWLIST = ("acme.fr",)
 
+    # ------------------------------------------------------------------ enforcement
+    # What a caller does with a decision, per context (used by app/enforcement.py).
+    # ALLOW always passes the text through unchanged and is not an alert.
+    ENFORCEMENT_ACTIONS = ("allow_and_log", "quarantine", "drop_chunk", "redact_urls", "block")
+    WARN_POLICY = {
+        "user_prompt": "allow_and_log",   # ambiguous user text goes through; the SOC sees the event
+        "document": "quarantine",         # not indexed, moved to quarantine/ for review
+        "retrieved_chunk": "drop_chunk",  # removed from the LLM context, other chunks are kept
+        "llm_output": "redact_urls",      # unapproved URLs replaced; blocked if that is not enough
+    }
+    BLOCK_POLICY = {
+        "user_prompt": "block",
+        "document": "quarantine",         # ARCHITECTURE §2: BLOCK -> quarantine/
+        "retrieved_chunk": "drop_chunk",
+        "llm_output": "block",
+    }
+    URL_REDACTION = "[URL BLOCKED]"
+
     # ------------------------------------------------------------------ contexts
     CONTEXTS = ("user_prompt", "document", "retrieved_chunk", "llm_output")
 
@@ -174,6 +192,18 @@ class ScoringRules:
         if context not in cls.CONTEXT_RULES:
             raise ValueError(f"unknown context {context!r}; expected one of {cls.CONTEXTS}")
         return cls.CONTEXT_RULES[context]
+
+    @classmethod
+    def enforcement_action(cls, decision: str, context: str) -> Optional[str]:
+        """Action for a decision in a context; None for ALLOW. ValueError on unknown input."""
+        cls.context_rules(context)  # validates the context
+        if decision == "ALLOW":
+            return None
+        if decision == "WARN":
+            return cls.WARN_POLICY[context]
+        if decision == "BLOCK":
+            return cls.BLOCK_POLICY[context]
+        raise ValueError(f"unknown decision {decision!r}")
 
     @classmethod
     def detector_weight(cls, context: str, detector: str) -> float:
