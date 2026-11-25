@@ -91,8 +91,8 @@ Les poids ne sont pas réglés pour atteindre une décision sur un exemple préc
 
 | Palier | Points | Décision seul | Techniques |
 |---|---|---|---|
-| A | 50 | BLOCK | `prompt_override`, `fake_delimiter`, `markdown_image_exfil`, `DAN`, `developer_mode`, `evil_assistant` |
-| B | 35 | WARN | `extraction`, `ai_addressing`, `conditional_instruction`, `hidden_html_comment`, `zero_width_chars`, `unapproved_url`, `unrestricted` |
+| A | 50 | BLOCK | `prompt_override`, `fake_delimiter`, `markdown_image_exfil`, `secret_known_format`, `DAN`, `developer_mode`, `evil_assistant` |
+| B | 35 | WARN | `extraction`, `credential_disclosure`, `ai_addressing`, `conditional_instruction`, `hidden_html_comment`, `zero_width_chars`, `unapproved_url`, `unrestricted` |
 | Signal faible | 10 | ALLOW (0 point s'il est seul) | `role_switching`, `relay_instruction` |
 
 Les poids des détecteurs par contexte valent tous 1,0. Seuls changent, selon le contexte, les détecteurs actifs (`output` seulement pour `llm_output`) et les constats désactivés (Markdown et longueur dans les documents, URL dans les prompts utilisateur).
@@ -106,5 +106,6 @@ Les poids des détecteurs par contexte valent tous 1,0. Seuls changent, selon le
 | D1 | Décodage des segments base64 insérés dans le texte (détecteur, pas un poids) | Le base64 n'était décodé que si tout le texte était du base64 : `attack_prompts.txt:59` et `chunks/attack/politique_mdp_base64.md` étaient manqués. Aucun échantillon bénin n'obtient de nouveau décodage. | `user_prompt` FN alerte 2,0 % → 0,0 %, FN blocage 32,0 % → 30,0 % ; `retrieved_chunk` FN 6,7 % → 0,0 % |
 
 | D2 | Extraction de l'hôte d'une URL par liste blanche de caractères (lettres Unicode, chiffres, `-.:@%`, fin sur une lettre ou un chiffre) au lieu d'une liste noire | Trouvé en P2 sur le corpus `data/corpus/`, pas sur le jeu dev : la ponctuation collée à l'URL restait dans l'hôte (`https://moncompte.acme.fr,` → `moncompte.acme.fr,` ; Markdown gras `**https://…acme.fr**` → `…acme.fr**`). L'URL officielle était donc « non autorisée » : 6 documents légitimes sur 10 en WARN (mis en quarantaine à l'ingestion), et une réponse correcte du LLM aurait été caviardée. | Jeu dev : inchangé (aucune URL suivie de ponctuation). Corpus Acme en contexte `document` : 6/10 WARN → 0/10. |
+| O1 | Détecteur de sortie : `secret_known_format` (palier A, 50 : formats Stripe, AWS, GitHub, Slack, clé Google, clé privée, JWT) et `credential_disclosure` (palier B, 35 : valeur de type mot de passe après « mot de passe », « password », « api_key »…). Les mêmes motifs caviardent l'extrait du journal d'audit. | Exigence P2 (scanner de sortie [4], OWASP LLM02). Actif uniquement en contexte `llm_output`. | Jeu dev : inchangé (il ne contient pas de jeu `llm_output`). Mesure de substitution : les 10 documents du corpus et les 15 chunks bénins scannés comme s'ils étaient une réponse du LLM restent ALLOW (0 FP). Tests unitaires : 1 vrai positif et 1 faux positif par format. |
 
 **Piste non appliquée (W2) :** séparer les motifs très précis (« disable your safety filters », « remove restrictions ») de l'expression vague « no restrictions » en deux techniques distinctes (palier A et palier B). Cela demande de modifier des tests existants du détecteur de jailbreak ; la décision est laissée ouverte.

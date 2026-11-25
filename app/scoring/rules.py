@@ -61,7 +61,9 @@ class ScoringRules:
 
     OUTPUT_RULES = {
         "weights": {
-            "markdown_image_exfil": 50,  # tier A
+            "markdown_image_exfil": 50,   # tier A
+            "secret_known_format": 50,    # tier A: Stripe/AWS/GitHub/Slack/Google key, private key, JWT
+            "credential_disclosure": 35,  # tier B: "le mot de passe est Xyz123", plausible in a doc quote
         }
     }
 
@@ -157,6 +159,8 @@ class ScoringRules:
         "evil_assistant": "injection.jailbreak",
         "extraction": "system_prompt_leakage",
         "markdown_image_exfil": "sensitive_info_disclosure",
+        "secret_known_format": "sensitive_info_disclosure",
+        "credential_disclosure": "sensitive_info_disclosure",
         "encoded_payload": "evasion.encoding",
         "role_switching": "signal",
         "relay_instruction": "signal",
