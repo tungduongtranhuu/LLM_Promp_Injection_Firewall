@@ -20,6 +20,18 @@ class ChatResponse(BaseModel):
     request_id: Optional[str] = None
 
 
+class StoredChunk(BaseModel):
+    """A chunk of the knowledge base as stored in the vector store."""
+    chunk_id: str  # "<doc_id>#<chunk_index>"
+    doc_id: str  # file name in data/corpus/
+    doc_sha256: str  # sha256 of the whole source file: the IOC hash for a poisoned document
+    chunk_index: int
+    chunk_sha256: str
+    ingested_at: str  # UTC ISO-8601
+    text: str
+    distance: Optional[float] = None  # set by a similarity query
+
+
 class Finding(BaseModel):
     """One technique detected in the scanned text, with its points and taxonomy."""
     technique: str  # e.g. "prompt_override", "ai_addressing"
