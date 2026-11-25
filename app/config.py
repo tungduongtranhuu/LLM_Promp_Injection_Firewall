@@ -1,8 +1,8 @@
 """
 Configuration Management
 
-Loads environment variables for API keys, threshold overrides and logging.
-Uses python-dotenv for local development, environment variables for production.
+Loads environment variables for the LLM provider, RAG paths, threshold overrides
+and logging. Uses python-dotenv for local development, environment variables otherwise.
 
 Scoring numbers (weights, thresholds) are defined only in app/scoring/rules.py.
 This module may override thresholds from the environment, but its defaults
@@ -18,9 +18,20 @@ from app.scoring.rules import ScoringRules
 # Load environment variables from .env file (if exists)
 load_dotenv()
 
-# ========== LLM API Configuration ==========
-api_key = os.getenv("GEMINI_API_KEY", "")
-llm_model = os.getenv("LLM_MODEL", "gemini-pro")
+# ========== LLM provider: Ollama on the host (WSL), never in docker-compose ==========
+ollama_url = os.getenv("OLLAMA_URL", "http://localhost:11434").rstrip("/")
+ollama_model = os.getenv("OLLAMA_MODEL", "qwen2.5:3b")
+ollama_embed_model = os.getenv("OLLAMA_EMBED_MODEL", "nomic-embed-text")
+llm_timeout = float(os.getenv("LLM_TIMEOUT", "120"))
+
+# ========== RAG ==========
+RAG_MODES = ("normal", "degraded", "maintenance")
+rag_mode = os.getenv("RAG_MODE", "normal")
+rag_top_k = int(os.getenv("RAG_TOP_K", "4"))
+corpus_path = os.getenv("CORPUS_PATH", "data/corpus")
+chroma_path = os.getenv("CHROMA_PATH", "data/chroma")
+chroma_collection = os.getenv("CHROMA_COLLECTION", "acme_kb")
+quarantine_path = os.getenv("QUARANTINE_PATH", "quarantine")
 
 # ========== Security Thresholds (env overrides of ScoringRules) ==========
 block_threshold = int(os.getenv("BLOCK_THRESHOLD", ScoringRules.BLOCK_THRESHOLD))
@@ -28,11 +39,4 @@ warn_threshold = int(os.getenv("WARN_THRESHOLD", ScoringRules.WARN_THRESHOLD))
 
 # ========== Logging Configuration ==========
 log_level = os.getenv("LOG_LEVEL", "INFO")
-log_file = os.getenv("LOG_FILE", "logs/firewall.log")
 audit_log_path = os.getenv("AUDIT_LOG_PATH", "logs/firewall.jsonl")  # JSONL contract with the SIEM
-
-
-# ========== Helper Functions ==========
-def is_secure_api_key() -> bool:
-    """Check if API key is configured"""
-    return len(api_key) > 0

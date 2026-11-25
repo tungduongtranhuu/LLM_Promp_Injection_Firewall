@@ -12,19 +12,35 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 def test_env_file_exists():
     """Test that .env file can be loaded"""
     try:
-        from app.config import api_key, block_threshold, warn_threshold
+        from app.config import block_threshold, ollama_url, warn_threshold
         # If we get here, config loaded successfully
         assert True, "Config loaded successfully"
     except Exception as e:
         raise AssertionError(f"Config loading failed: {e}")
 
 
-def test_api_key_type():
-    """Test that api_key is string"""
-    from app.config import api_key
-    
-    if api_key is not None:
-        assert isinstance(api_key, str), f"Expected str, got {type(api_key)}"
+def test_ollama_defaults_point_to_host(monkeypatch):
+    """Ollama runs on the host (WSL), not in docker-compose."""
+    import importlib
+    from app import config
+
+    for name in ("OLLAMA_URL", "OLLAMA_MODEL", "OLLAMA_EMBED_MODEL", "RAG_MODE"):
+        monkeypatch.delenv(name, raising=False)
+    try:
+        importlib.reload(config)
+        assert config.ollama_url == "http://localhost:11434"
+        assert config.ollama_model == "qwen2.5:3b"
+        assert config.ollama_embed_model == "nomic-embed-text"
+        assert config.rag_mode == "normal"
+    finally:
+        monkeypatch.undo()
+        importlib.reload(config)
+
+
+def test_gemini_config_removed():
+    from app import config
+
+    assert not hasattr(config, "api_key") and not hasattr(config, "is_secure_api_key")
 
 
 def test_block_threshold_is_integer():
@@ -112,7 +128,6 @@ def run_all_tests():
     """Run all tests and report results"""
     tests = [
         ("Env File Exists", test_env_file_exists),
-        ("API Key Type", test_api_key_type),
         ("Block Threshold is Integer", test_block_threshold_is_integer),
         ("Warn Threshold is Integer", test_warn_threshold_is_integer),
         ("Thresholds Reasonable Values", test_thresholds_reasonable_values),
