@@ -11,9 +11,15 @@ from collections.abc import Sequence
 
 from app import config
 from app.enforcement import enforce
-from app.llm.provider import LLMProvider, LLMUnavailableError, Message, load_system_prompt
+from app.llm.provider import (
+    DEGRADED_PROMPT_PATH,
+    LLMProvider,
+    LLMUnavailableError,
+    Message,
+    load_system_prompt,
+)
 from app.logging.audit import log_scan
-from app.models import ChatResponse, StoredChunk
+from app.models import ChatResponse, RagMode, StoredChunk
 from app.pipeline import scan
 from app.rag.retriever import retrieve
 from app.rag.store import VectorStore
@@ -28,6 +34,11 @@ NO_CONTEXT_MESSAGE = (
     "Contactez le support : https://support.acme.fr ou poste 4242."
 )
 UNAVAILABLE_MESSAGE = "L'assistant est momentanément indisponible. Réessayez dans quelques minutes."
+MAINTENANCE_MESSAGE = (
+    "L'assistant est en maintenance. Pour une demande urgente, contactez le support : "
+    "https://support.acme.fr ou poste 4242."
+)
+DEGRADED_NOTICE = "Mode dégradé : la base documentaire est indisponible, cette réponse est générale.\n\n"
 
 
 def build_messages(question: str, chunks: Sequence[StoredChunk]) -> list[Message]:
@@ -38,20 +49,33 @@ def build_messages(question: str, chunks: Sequence[StoredChunk]) -> list[Message
     ]
 
 
+def build_degraded_messages(question: str) -> list[Message]:
+    return [
+        {"role": "system", "content": load_system_prompt()},
+        {"role": "system", "content": load_system_prompt(DEGRADED_PROMPT_PATH)},
+        {"role": "user", "content": f"Question : {question}"},
+    ]
+
+
 def answer(
     message: str,
     *,
     provider: LLMProvider,
     store: VectorStore,
     request_id: str,
+    mode: RagMode = "normal",
     top_k: int | None = None,
 ) -> ChatResponse:
     # [1] input scan: the prompt is always logged (prompt.scanned), whatever the decision.
     prompt_result = scan(message, "user_prompt")
     log_scan("prompt.scanned", prompt_result, message, request_id=request_id)
-    base = {"score": prompt_result.score, "decision": prompt_result.decision, "request_id": request_id}
+    base = {"score": prompt_result.score, "decision": prompt_result.decision, "request_id": request_id, "mode": mode}
+    if mode == "maintenance":
+        return ChatResponse(response=MAINTENANCE_MESSAGE, status="maintenance", **base)
     if not enforce(prompt_result, message).allowed:
         return ChatResponse(response=BLOCKED_MESSAGE, status="blocked", **base)
+    if mode == "degraded":
+        return _answer_degraded(message, provider, request_id, base)
 
     try:
         # [2] retrieve + [3] per-chunk scan
@@ -65,6 +89,18 @@ def answer(
         return ChatResponse(response=UNAVAILABLE_MESSAGE, status="unavailable", **base)
 
     return _scan_output(raw_answer, request_id, common)
+
+
+def _answer_degraded(message: str, provider: LLMProvider, request_id: str, base: dict) -> ChatResponse:
+    """No retrieval: the knowledge base is not trusted. [4] still applies."""
+    try:
+        raw_answer = provider.chat(build_degraded_messages(message))
+    except LLMUnavailableError:
+        return ChatResponse(response=UNAVAILABLE_MESSAGE, status="unavailable", **base)
+    result = _scan_output(raw_answer, request_id, base)
+    if result.status != "blocked":
+        result.response = DEGRADED_NOTICE + result.response
+    return result
 
 
 def _scan_output(raw_answer: str, request_id: str, common: dict) -> ChatResponse:

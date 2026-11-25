@@ -16,6 +16,7 @@ import httpx
 from app import config
 
 SYSTEM_PROMPT_PATH = Path(__file__).resolve().parent / "system_prompt.md"
+DEGRADED_PROMPT_PATH = Path(__file__).resolve().parent / "system_prompt_degraded.md"
 
 
 class Message(TypedDict):

@@ -25,8 +25,7 @@ ollama_embed_model = os.getenv("OLLAMA_EMBED_MODEL", "nomic-embed-text")
 llm_timeout = float(os.getenv("LLM_TIMEOUT", "120"))
 
 # ========== RAG ==========
-RAG_MODES = ("normal", "degraded", "maintenance")
-rag_mode = os.getenv("RAG_MODE", "normal")
+rag_mode = os.getenv("RAG_MODE", "normal")  # normal | degraded | maintenance (validated in app/mode.py)
 rag_top_k = int(os.getenv("RAG_TOP_K", "4"))
 corpus_path = os.getenv("CORPUS_PATH", "data/corpus")
 chroma_path = os.getenv("CHROMA_PATH", "data/chroma")

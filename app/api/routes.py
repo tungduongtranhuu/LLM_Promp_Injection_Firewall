@@ -4,6 +4,7 @@ from functools import lru_cache
 from fastapi import APIRouter, Depends, Response
 
 from app.llm.provider import LLMProvider, OllamaProvider
+from app.mode import get_mode
 from app.models import ChatRequest, ChatResponse
 from app.rag.chain import answer
 from app.rag.store import VectorStore
@@ -32,7 +33,9 @@ def chat(
     store: VectorStore = Depends(get_store),
 ) -> ChatResponse:
     """[1] input scan -> [2][3] retrieval + chunk scan -> LLM -> [4] output scan."""
-    result = answer(request.message, provider=provider, store=store, request_id=uuid.uuid4().hex)
+    result = answer(
+        request.message, provider=provider, store=store, request_id=uuid.uuid4().hex, mode=get_mode()
+    )
     if result.status in UNAVAILABLE_STATUSES:
         response.status_code = 503
     return result
@@ -43,4 +46,4 @@ def health(
     provider: LLMProvider = Depends(get_provider),
     store: VectorStore = Depends(get_store),
 ) -> dict:
-    return {"status": "ok", "ollama": provider.ping(), "chunks": store.count()}
+    return {"status": "ok", "mode": get_mode(), "ollama": provider.ping(), "chunks": store.count()}

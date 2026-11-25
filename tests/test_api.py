@@ -27,7 +27,7 @@ def test_injection_is_blocked_and_logged(client, provider, events):
 
 def test_health(client, store):
     store.upsert_document("a.md", "s", ["un chunk"])
-    assert client.get("/health").json() == {"status": "ok", "ollama": True, "chunks": 1}
+    assert client.get("/health").json() == {"status": "ok", "mode": "normal", "ollama": True, "chunks": 1}
 
 
 def test_health_reports_ollama_down(client, provider):
