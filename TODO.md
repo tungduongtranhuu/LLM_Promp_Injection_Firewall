@@ -102,6 +102,7 @@ Ngoài ra `config.py` có `custom_*_weight` và `get_risk_action` nhưng **khôn
 - [x] Test cho mỗi điểm trên, và tất cả test cũ vẫn phải pass
 - Ghi chú: `scanners/` và `sanitizers/` (file rỗng) được thay thế bởi `pipeline.scan(text, context)`. P1 không sửa chúng; P2 quyết định xóa hoặc biến thành wrapper mỏng.
 - Kết quả FP/FN và nhật ký chỉnh trọng số: `eval/RESULTS.md`.
+- [x] Chính sách xử lý WARN/BLOCK theo context (`ScoringRules.WARN_POLICY` / `BLOCK_POLICY`, áp dụng bởi `app/enforcement.py::enforce`). P2 nối vào chuỗi RAG.
 ### P2 : Nền tảng RAG (~2h)
 - [ ] Ollama chạy **trên máy (WSL)** tại `http://localhost:11434` (biến `OLLAMA_URL`). **Không** thêm Ollama vào docker-compose. `docker-compose.yml` chỉ là tùy chọn, dành cho app.
 - [ ] `app/llm/provider.py` (Ollama; bỏ Gemini hoặc để làm provider tùy chọn)
@@ -133,6 +134,7 @@ Ngoài ra `config.py` có `custom_*_weight` và `get_risk_action` nhưng **khôn
 - [ ] Dashboard tối giản (Streamlit) hoặc dashboard Wazuh
 - [ ] Rejeu tự động các tài liệu hợp lệ bị mất trong khoảng RPO
 - [ ] CI GitHub Actions chạy `pytest`
+- [ ] Detector ngữ nghĩa (embedding similarity) để giảm FN do diễn đạt khác, đo trên holdout
 ---
  
 ## 3. Định nghĩa "xong" cho MVP
