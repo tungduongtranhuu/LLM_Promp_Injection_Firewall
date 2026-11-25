@@ -5,7 +5,13 @@ from __future__ import annotations
 import re
 from collections.abc import Iterable, Sequence
 
-URL_RE = re.compile(r"\bhttps?://([^\s/?#<>\"'()\[\]]+)", re.IGNORECASE)
+# Host part of a URL (userinfo and port included), as a whitelist: Unicode letters
+# (homoglyph hosts must still match), digits, "-", ".", ":", "@", "%", ending on a
+# letter or digit. A blacklist kept the punctuation around the URL in the host:
+# "https://moncompte.acme.fr," or Markdown bold "**https://moncompte.acme.fr**".
+HOST_CHARS = r"[\w\-.:@%]*[^\W_]"
+
+URL_RE = re.compile(rf"\bhttps?://({HOST_CHARS})", re.IGNORECASE)
 
 
 def url_host(netloc: str) -> str:
@@ -41,7 +47,7 @@ def unapproved_hosts(hosts: Sequence[str], allowlist: Iterable[str]) -> list[str
 # Whole URL: scheme, host (group 1), then an optional path that does not end
 # on sentence punctuation, so "see https://x.example/a." keeps its final dot.
 URL_FULL_RE = re.compile(
-    r"\bhttps?://([^\s/?#<>\"'()\[\]]+)(?:[/?#][^\s<>\"'()\[\]]*[^\s<>\"'()\[\].,;:!?])?",
+    rf"\bhttps?://({HOST_CHARS})(?:[/?#][^\s<>\"'()\[\]]*[^\s<>\"'()\[\].,;:!?])?",
     re.IGNORECASE,
 )
 

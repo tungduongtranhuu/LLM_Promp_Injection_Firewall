@@ -2,7 +2,7 @@ import re
 from collections.abc import Sequence
 from typing import Dict, List
 
-from app.detectors.url_utils import host_allowed, url_host
+from app.detectors.url_utils import HOST_CHARS, host_allowed, url_host
 
 
 class OutputDetector:
@@ -15,7 +15,7 @@ class OutputDetector:
     Enabled only for the llm_output context (rules.CONTEXT_RULES).
     """
 
-    MARKDOWN_IMAGE = re.compile(r"!\[[^\]]*\]\(\s*<?\s*https?://([^\s/?#<>\"'()]+)", re.IGNORECASE)
+    MARKDOWN_IMAGE = re.compile(rf"!\[[^\]]*\]\(\s*<?\s*https?://({HOST_CHARS})", re.IGNORECASE)
 
     def __init__(self, url_allowlist: Sequence[str] = ()) -> None:
         self.url_allowlist = tuple(url_allowlist)

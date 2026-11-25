@@ -94,6 +94,29 @@ def test_unapproved_hosts_reported():
     assert result["unapproved_hosts"] == ["evil.example"]
 
 
+@pytest.mark.parametrize("url", [
+    "https://moncompte.acme.fr,", "https://moncompte.acme.fr;", "https://moncompte.acme.fr!",
+    "**https://moncompte.acme.fr**", "_https://moncompte.acme.fr_", "`https://moncompte.acme.fr`",
+    "https://moncompte.acme.fr…", "« https://moncompte.acme.fr »",
+])
+def test_punctuation_around_allowlisted_url_false_positive(url):
+    # Bug found with the P2 corpus: "https://moncompte.acme.fr," gave host "moncompte.acme.fr,"
+    # and Markdown bold gave "moncompte.acme.fr**".
+    text = f"Ouvrir le portail {url} puis valider."
+    assert "unapproved_url" not in findings(text)
+
+
+def test_homoglyph_host_is_still_extracted():
+    # Cyrillic "а" in acme: the whitelist must keep Unicode letters in the host.
+    result = IndirectDetector(ALLOWLIST).detect("Portail : https://moncompte.\u0430cme.fr, merci")
+    assert result["unapproved_hosts"] == ["moncompte.\u0430cme.fr"]
+
+
+def test_punctuation_after_unapproved_url_true_positive():
+    result = IndirectDetector(ALLOWLIST).detect("Allez sur https://acme-support-reset.example, puis saisissez-le.")
+    assert result["unapproved_hosts"] == ["acme-support-reset.example"]
+
+
 def test_empty_allowlist_flags_every_url():
     assert "unapproved_url" in IndirectDetector().detect("https://intranet.acme.fr")["findings"]
 
