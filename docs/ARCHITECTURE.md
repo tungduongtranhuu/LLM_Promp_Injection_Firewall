@@ -109,11 +109,12 @@ Les documents légitimes ajoutés entre le snapshot et la compromission sont lis
  
 ```text
 app/
-  main.py  config.py  models.py  pipeline.py  normalize.py
+  main.py  config.py  models.py  normalize.py
   api/routes.py               # /chat, /ingest, /health, /admin/mode
   detectors/                  # regex, jailbreak, encoding, heuristic, indirect
   scoring/                    # rules.py (source unique des seuils), scorer.py
-  scanners/                   # input, document, retrieval, output
+  pipeline.py                 # scan(text, context) : point d'entrée unique (input, document, retrieval, output)
+  enforcement.py              # enforce() : action par contexte (WARN_POLICY / BLOCK_POLICY de rules.py)
   llm/provider.py
   rag/ingest.py  retriever.py  store.py
   logging/audit.py            # JSONL

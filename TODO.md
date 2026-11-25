@@ -8,7 +8,7 @@
 |---|---|
 | `detectors/` (regex, jailbreak, encoding, heuristic) | ✅ Có code và test |
 | `scoring/` (rules, scorer) | ✅ Có |
-| `scanners/`, `sanitizers/`, `api/proxy.py`, `logging/`, `dashboard/` | ❌ File rỗng (0 dòng) |
+| `scanners/`, `sanitizers/`, `api/proxy.py`, `logging/logger.py`, `dashboard/` | 🗑️ Đã xóa (file rỗng). `pipeline.scan(text, context)` và `enforcement.enforce()` thay thế; `logging/audit.py` có code |
 | `api/routes.py` `/chat` | ❌ Stub, luôn trả về `"received"`, không gọi detector nào |
 | Pipeline (ai tạo ra các *variants* mà scorer cần?) | ❌ Chưa có |
 | LLM client | ❌ Config có `GEMINI_API_KEY` nhưng chưa có code gọi |
@@ -100,7 +100,7 @@ Ngoài ra `config.py` có `custom_*_weight` và `get_risk_action` nhưng **khôn
 - [x] Gộp ngưỡng về một nơi (mục 1.3)
 - [x] `app/logging/audit.py` : ghi JSONL theo schema trong ARCHITECTURE.md §3.3 (UTC, `request_id`, `excerpt` tối đa 200 ký tự, **không** log toàn bộ secret)
 - [x] Test cho mỗi điểm trên, và tất cả test cũ vẫn phải pass
-- Ghi chú: `scanners/` và `sanitizers/` (file rỗng) được thay thế bởi `pipeline.scan(text, context)`. P1 không sửa chúng; P2 quyết định xóa hoặc biến thành wrapper mỏng.
+- Ghi chú: `scanners/`, `sanitizers/`, `api/proxy.py`, `dashboard/`, `logging/logger.py` (file rỗng): đã xóa, `pipeline.scan(text, context)` và `enforcement.enforce()` thay thế.
 - Kết quả FP/FN và nhật ký chỉnh trọng số: `eval/RESULTS.md`.
 - [x] Chính sách xử lý WARN/BLOCK theo context (`ScoringRules.WARN_POLICY` / `BLOCK_POLICY`, áp dụng bởi `app/enforcement.py::enforce`). P2 nối vào chuỗi RAG.
 ### P2 : Nền tảng RAG (~2h)
