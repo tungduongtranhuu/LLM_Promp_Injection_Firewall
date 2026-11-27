@@ -9,9 +9,9 @@
 | `detectors/` (regex, jailbreak, encoding, heuristic) | ✅ Có code và test |
 | `scoring/` (rules, scorer) | ✅ Có |
 | `scanners/`, `sanitizers/`, `api/proxy.py`, `logging/logger.py`, `dashboard/` | 🗑️ Đã xóa (file rỗng). `pipeline.scan(text, context)` và `enforcement.enforce()` thay thế; `logging/audit.py` có code |
-| `api/routes.py` `/chat` | ❌ Stub, luôn trả về `"received"`, không gọi detector nào |
-| Pipeline (ai tạo ra các *variants* mà scorer cần?) | ❌ Chưa có |
-| LLM client | ❌ Config có `GEMINI_API_KEY` nhưng chưa có code gọi |
+| `api/routes.py` `/chat` | ✅ (P2) Chạy đủ chuỗi [1] → [2][3] → LLM → [4] qua `app/rag/chain.py` |
+| Pipeline (ai tạo ra các *variants* mà scorer cần?) | ✅ (P1) `app/normalize.py` + `app/pipeline.py` |
+| LLM client | ✅ (P2) `app/llm/provider.py` (Ollama trên máy host); đã bỏ Gemini |
  
 ---
  
@@ -104,12 +104,18 @@ Ngoài ra `config.py` có `custom_*_weight` và `get_risk_action` nhưng **khôn
 - Kết quả FP/FN và nhật ký chỉnh trọng số: `eval/RESULTS.md`.
 - [x] Chính sách xử lý WARN/BLOCK theo context (`ScoringRules.WARN_POLICY` / `BLOCK_POLICY`, áp dụng bởi `app/enforcement.py::enforce`). P2 nối vào chuỗi RAG.
 ### P2 : Nền tảng RAG (~2h)
-- [ ] Ollama chạy **trên máy (WSL)** tại `http://localhost:11434` (biến `OLLAMA_URL`). **Không** thêm Ollama vào docker-compose. `docker-compose.yml` chỉ là tùy chọn, dành cho app.
-- [ ] `app/llm/provider.py` (Ollama; bỏ Gemini hoặc để làm provider tùy chọn)
-- [ ] `data/corpus/` : 8–10 file `.md` của một công ty giả "Acme" (VPN, reset mật khẩu, mail, imprimantes...)
-- [ ] `app/rag/ingest.py`, `retriever.py`, `store.py` (ChromaDB, metadata `doc_id`, `sha256`, `ingested_at`)
-- [ ] `/chat` chạy đủ chuỗi: scan input → retrieve → scan từng chunk → LLM → scan output
-- [ ] Biến `RAG_MODE` (normal / degraded / maintenance)
+- [x] Ollama chạy **trên máy (WSL)** tại `http://localhost:11434` (biến `OLLAMA_URL`). **Không** thêm Ollama vào docker-compose. `docker-compose.yml` chỉ là tùy chọn, dành cho app.
+- [x] `app/llm/provider.py` (Ollama; đã bỏ Gemini)
+- [x] `data/corpus/` : 8–10 file `.md` của một công ty giả "Acme" (VPN, reset mật khẩu, mail, imprimantes...)
+- [x] `app/rag/ingest.py`, `retriever.py`, `store.py` (ChromaDB, metadata `doc_id`, `sha256`, `ingested_at`)
+- [x] `/chat` chạy đủ chuỗi: scan input → retrieve → scan từng chunk → LLM → scan output
+- [x] Biến `RAG_MODE` (normal / degraded / maintenance)
+- [x] Output scanner [4] phát hiện secret (`secret_known_format`, `credential_disclosure`, OWASP LLM02), ghi trong `eval/RESULTS.md` (O1)
+- Ghi chú P2:
+  - Sửa lỗi FP khi tách host của URL (dấu phẩy, Markdown `**…**` dính vào host): 6/10 tài liệu Acme bị quarantine nhầm (D2 trong `eval/RESULTS.md`).
+  - Đo thật với Ollama: chunk độc bị chèn thẳng vào Chroma bị loại (BLOCK 100) và câu trả lời vẫn đúng `moncompte.acme.fr`. **Lưu ý cho P3:** với câu hỏi "Comment réinitialiser mon mot de passe ?", chunk độc chỉ đứng thứ 5 (ngoài top-4), nên không bị truy xuất và cũng không có alert. Tài liệu trong `attack.py` cần được viết để lọt vào top-k với câu hỏi của drill.
+  - Ingest thật mất khoảng 2,5 phút cho 49 chunk; một câu `/chat` mất khoảng 1 phút (CPU).
+  - `encoded_payload` +5 điểm vì entropy trên mọi văn bản dài: không đổi quyết định, nhưng gây nhiễu (chưa sửa).
 ### P3 : Tấn công và phát hiện (~1.5h)
 - [ ] `resilience/attack.py` : tạo `procedure_reset_mdp_v2.md` chứa injection ẩn (comment HTML) dẫn tới `acme-support-reset.example`. Có 2 mode:
   - `--via-ingest` : đi qua ingestion, để chứng minh điểm [0] đưa file vào quarantine

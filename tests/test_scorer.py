@@ -27,6 +27,7 @@ def test_risk_thresholds_derived_from_constants():
 from app.detectors.heuristic_detector import HeuristicDetector
 from app.detectors.indirect_detector import IndirectDetector
 from app.detectors.jailbreak_detector import JailbreakDetector
+from app.detectors.output_detector import OutputDetector
 from app.detectors.regex_detector import RegexDetector
 from app.scoring.scorer import RiskScorer
 
@@ -131,7 +132,7 @@ def _all_detector_techniques():
         "regex": set(RegexDetector.PATTERNS),
         "jailbreak": set(JailbreakDetector.JAILBREAK_PATTERNS),
         "indirect": set(IndirectDetector.PATTERNS) | {"zero_width_chars", "unapproved_url"},
-        "output": {"markdown_image_exfil"},
+        "output": set(OutputDetector.TECHNIQUES),
         "heuristic": set(HeuristicDetector.ANOMALIES),
     }
     return techniques

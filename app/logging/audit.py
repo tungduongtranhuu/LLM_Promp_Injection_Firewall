@@ -19,6 +19,7 @@ from pathlib import Path
 from typing import Any, Optional
 
 from app import config
+from app.detectors.secret_patterns import KNOWN_SECRET_PATTERNS
 from app.models import ScanResult
 
 SOURCE = "llm_firewall"
@@ -44,6 +45,9 @@ def utc_timestamp(now: Optional[datetime] = None) -> str:
 
 
 def redact(text: str) -> str:
+    # Known formats first: an AWS key id (20 chars) or a JWT is shorter than _KEY_LIKE.
+    for pattern in KNOWN_SECRET_PATTERNS.values():
+        text = pattern.sub(REDACTED, text)
     text = _SECRET_ASSIGNMENT.sub(lambda m: f"{m.group(1)}{m.group(2)}{m.group(3)}{REDACTED}", text)
     return _KEY_LIKE.sub(REDACTED, text)
 

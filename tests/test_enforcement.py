@@ -123,3 +123,10 @@ def test_redaction_true_positive_markdown_image_and_lookalike():
 def test_redaction_false_positive_allowlisted_and_plain_text():
     text = "Voir https://intranet.acme.fr/vpn?x=1 ou acme-support-reset (sans lien)."
     assert redact_unapproved_urls(text, R.URL_ALLOWLIST, R.URL_REDACTION) == (text, [])
+
+
+def test_redaction_keeps_comma_after_url():
+    text = "Allez sur https://acme-support-reset.example, puis sur https://moncompte.acme.fr, merci."
+    out, hosts = redact_unapproved_urls(text, R.URL_ALLOWLIST, R.URL_REDACTION)
+    assert hosts == ["acme-support-reset.example"]
+    assert out == f"Allez sur {R.URL_REDACTION}, puis sur https://moncompte.acme.fr, merci."

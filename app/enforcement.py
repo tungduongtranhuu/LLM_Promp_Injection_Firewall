@@ -3,7 +3,7 @@
 The policy (which action for which decision and context) lives in
 ScoringRules.WARN_POLICY / BLOCK_POLICY. This module only applies it.
 Pure: no I/O. `log=True` tells the caller to write an audit event.
-Not wired into the RAG chain yet (P2).
+Used by app/rag/ingest.py [0], app/rag/retriever.py [3] and app/rag/chain.py [1][4].
 """
 
 from __future__ import annotations

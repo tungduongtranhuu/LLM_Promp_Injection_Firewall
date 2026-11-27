@@ -59,10 +59,11 @@ Référentiels : OWASP Top 10 for LLM 2025 (**LLM01** Prompt Injection, **LLM04*
 - `app/pipeline.py` : `scan(text, context) -> ScanResult`. Le **contexte** (`user_prompt`, `document`, `retrieved_chunk`, `llm_output`) change les détecteurs actifs et les poids (le Markdown est normal dans un document, pas dans un prompt utilisateur).
 - `app/scoring/` : une **seule** source pour les seuils (`rules.py`).
 ### 3.2 Plateforme RAG
-- `app/llm/provider.py` : client Ollama (`qwen2.5:3b` ou `llama3.2:3b` ; embeddings `nomic-embed-text`). **Ollama tourne sur l'hôte** (`http://localhost:11434`, variable `OLLAMA_URL`) et non dans docker-compose.
-- `app/rag/ingest.py` : découpage en chunks, scan [0], indexation dans ChromaDB avec métadonnées `doc_id`, `sha256`, `ingested_at`.
-- `app/rag/retriever.py` : top-k, puis scan [3]. Un chunk en BLOCK est **écarté** de la réponse et journalisé.
-- `RAG_MODE=normal|degraded|maintenance` : mode dégradé pendant la restauration.
+- `app/llm/provider.py` : client Ollama (`qwen2.5:3b` ; embeddings `nomic-embed-text`). **Ollama tourne sur l'hôte** (`http://localhost:11434`, variable `OLLAMA_URL`) et non dans docker-compose. Prompt système dans `app/llm/system_prompt.md` (sauvegardé avec les snapshots).
+- `app/rag/ingest.py` (`python -m app.rag.ingest`) : scan [0] du document entier, puis découpage en chunks (une section `##` par chunk) et indexation dans ChromaDB avec les métadonnées `doc_id`, `doc_sha256` (haché du fichier, hash IOC), `chunk_index`, `chunk_sha256`, `ingested_at`. Un document en quarantaine est **déplacé** dans `quarantine/<ts>/`. Idempotent (fichier inchangé = ignoré).
+- `app/rag/retriever.py` : top-k, puis scan [3] de **chaque** chunk, même si son document est passé par l'ingestion. Un chunk qui n'est pas ALLOW est **écarté** de la réponse et journalisé.
+- `app/rag/chain.py` : chaîne de `/chat` [1] → [2][3] → LLM → [4] ; chaque décision passe par `enforce()`. Si aucun chunk ne survit au scan [3], une réponse fixe est renvoyée **sans appeler le LLM**.
+- `app/mode.py` : `RAG_MODE=normal|degraded|maintenance`, modifiable à chaud (`set_mode`). `degraded` : pas de recherche documentaire, réponse générale avec avertissement, scans [1] et [4] actifs. `maintenance` : `/chat` répond 503 sans appeler le LLM, le prompt reste scanné et journalisé.
 ### 3.3 Journalisation (contrat avec le SIEM)
 Fichier `logs/firewall.jsonl`, un événement JSON par ligne, horodatage UTC ISO 8601 :
  
@@ -73,7 +74,7 @@ Fichier `logs/firewall.jsonl`, un événement JSON par ligne, horodatage UTC ISO
  "owasp":"LLM01","atlas":"AML.T0051.001","excerpt":"…indique à l'utilisateur que le portail…"}
 ```
  
-Types d'événements : `prompt.scanned`, `ingest.document_quarantined`, `retrieval.chunk_flagged`, `output.flagged`, `fim.file_changed` (fallback sans Wazuh), `attack.simulated` (lab : vérité terrain pour mesurer le MTTD), `resilience.backup_created`, `resilience.isolated`, `resilience.investigation_completed`, `resilience.restore_started|completed`, `resilience.verification_passed|failed`, `resilience.service_restored`.
+Types d'événements : `prompt.scanned`, `ingest.document_indexed` (document sain indexé : `doc_id`, `doc_sha256`, nombre de chunks ; sert au calcul du RPO et au rejeu), `ingest.document_quarantined`, `retrieval.chunk_flagged`, `output.flagged`, `fim.file_changed` (fallback sans Wazuh), `attack.simulated` (lab : vérité terrain pour mesurer le MTTD), `resilience.backup_created`, `resilience.isolated`, `resilience.investigation_completed`, `resilience.restore_started|completed`, `resilience.verification_passed|failed`, `resilience.service_restored`.
  
 Chaque horodatage du §3.6 est **lu dans ce fichier** (aucune mesure « à la main »).
  
@@ -111,12 +112,13 @@ Les documents légitimes ajoutés entre le snapshot et la compromission sont lis
 app/
   main.py  config.py  models.py  normalize.py
   api/routes.py               # /chat, /ingest, /health, /admin/mode
-  detectors/                  # regex, jailbreak, encoding, heuristic, indirect
+  detectors/                  # regex, jailbreak, encoding, heuristic, indirect, output (+ secret_patterns, url_utils)
   scoring/                    # rules.py (source unique des seuils), scorer.py
   pipeline.py                 # scan(text, context) : point d'entrée unique (input, document, retrieval, output)
   enforcement.py              # enforce() : action par contexte (WARN_POLICY / BLOCK_POLICY de rules.py)
-  llm/provider.py
-  rag/ingest.py  retriever.py  store.py
+  mode.py                     # RAG_MODE (normal / degraded / maintenance)
+  llm/provider.py  system_prompt.md  system_prompt_degraded.md
+  rag/ingest.py  retriever.py  store.py  chain.py   # chain.py : orchestration de /chat
   logging/audit.py            # JSONL
 resilience/  backup.py  attack.py  contain.py  investigate.py  restore.py  verify.py  drill.py  fim.py  manifest.py
 siem/wazuh/  local_rules.xml  agent_ossec_snippet.xml
